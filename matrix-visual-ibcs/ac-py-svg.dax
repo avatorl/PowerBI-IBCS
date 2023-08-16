@@ -1,0 +1,49 @@
+AC,PY SVG = 
+//AC - Actual Period (Year) and PY - Previous Period (Year) sales
+//Returns an SVG image code with AC and PY bars
+//  and a vertical line for average (per sales person) AC sales
+VAR _ColorAC = "#000000"
+VAR _ColorPY = "#c6c6c6"
+VAR _ValueAvg = [Average AC]
+VAR _ValueAC =
+    IF ( HASONEVALUE ( 'Sales Person'[Name] ), [AC], _ValueAvg )
+VAR _FontWeight =
+    IF ( HASONEVALUE ( 'Sales Person'[Name] ), "normal", "bold" )
+VAR _ValuePY = [PY]
+VAR _maxValue =
+    --max value (AC and PY)
+    MAX (
+        MAXX ( ALLSELECTED ( 'Sales Person' ), [AC] ),
+        MAXX ( ALLSELECTED ( 'Sales Person' ), [PY] )
+    ) / 0.9
+VAR _WidthAvg =
+    --width (up to 100%)
+    FORMAT ( DIVIDE ( _ValueAvg, _maxValue ), "0%" )
+VAR _WidthAC =
+    --width (up to 100%)
+    FORMAT ( DIVIDE ( _ValueAC, _maxValue ), "0%" )
+VAR _WidthPY =
+    --width (up to 100%)
+    FORMAT ( DIVIDE ( _ValuePY, _maxValue ), "0%" )
+VAR _Rank =
+    --row value rank to ensure correct column sorting (by AC value)
+    100000
+        + RANKX ( ALLSELECTED ( 'Sales Person' ), [AC],, ASC )
+VAR _SVG = 
+    --SVG code
+    --header
+    --line (Average AC)
+    --rectangle for PY
+    --rectangle for AC
+    --text data label for AC
+    --SVG style
+    "data:image/svg+xml;utf8," & "<svg xmlns=""http://www.w3.org/2000/svg"">
+    /*" & _Rank & "*/
+    <line  x1=""" & _WidthAvg & """ x2=""" & _WidthAvg & """ y1=""0%"" y2=""100%"" stroke=""" & _ColorAC & """ stroke-width=""1""></line >
+    <rect y=""2%"" x=""0"" width=""" & _WidthPY & """ height=""67%"" fill=""" & _ColorPY & """></rect>
+    <rect y=""17%"" x=""0"" width=""" & _WidthAC & """ height=""67%"" fill=""" & _ColorAC & """></rect>   
+    <text x=""" & _WidthAC & """ dx=""5"" y=""55%"" font-weight=""" & _FontWeight & """>" & _ValueAC & "</text>
+" & [SVG Style] & "
+</svg>"
+RETURN
+    _SVG
