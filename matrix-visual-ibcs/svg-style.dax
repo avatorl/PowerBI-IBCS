@@ -1,0 +1,11 @@
+SVG Style = 
+//SVG <style></style> code
+"<style>
+    <![CDATA[
+      text{
+        font-family: Segoe UI;
+        font-size: 18px;
+        alignment-baseline: middle;
+      }
+    ]]>
+  </style>"
