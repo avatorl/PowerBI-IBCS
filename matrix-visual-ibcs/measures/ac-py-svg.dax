@@ -1,8 +1,7 @@
-AC,PY SVG = 
 //AC - Actual Period (Year) and PY - Previous Period (Year) sales
 //Returns an SVG image code with AC and PY bars
 //  and a vertical line for average (per sales person) AC sales
-VAR _ColorAC = "#000000"
+VAR _ColorAC = "#404040"
 VAR _ColorPY = "#c6c6c6"
 VAR _ValueAvg = [Average AC]
 VAR _ValueAC =
