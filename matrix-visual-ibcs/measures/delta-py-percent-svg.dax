@@ -1,11 +1,10 @@
-DeltaPY% SVG = 
 //ΔPY% = (AC - PY) / PY (relative difference between AC and PY)
 //Returns an SVG image code with ΔPY% pin charts (green - positive, red - negative, black pinheads)
 //  and a vertical line for Axis Y (ΔPY% = 0)
 VAR _ColorGrey = "#c6c6c6"
 VAR _ColorRed = "#ff0000"
 VAR _ColorGreen = "#008e96"
-VAR _ColorBlack = "#000000"
+VAR _ColorBlack = "#404040"
 VAR _Value =
     --ΔPY%
     IF (
@@ -28,7 +27,7 @@ VAR _maxValue =
     )
 VAR _WidthValue =
     --bar width (numeric value)
-    ( DIVIDE ( ABS ( _Value ), _maxValue ) / 2 ) * 0.7
+    ( DIVIDE ( ABS ( _Value ), _maxValue ) / 2 ) * 0.65
 VAR _Width =
     --bar width - text for SVG
     FORMAT ( _WidthValue, "0.0%" )
@@ -63,7 +62,7 @@ VAR _Anchor =
     SWITCH ( TRUE (), _Value >= 0, "start", _Value < 0, "end" )
 VAR _DX =
     --text offset along axis X
-    SWITCH ( TRUE (), _Value >= 0, 7, _Value < 0, - 7 )
+    SWITCH ( TRUE (), _Value >= 0, 10, _Value < 0, - 10 )
 VAR _Rank =
     --row value rank to ensure correct column sorting
     10000
@@ -80,7 +79,7 @@ VAR _SVG =
     "data:image/svg+xml;utf8," & "<svg xmlns=""http://www.w3.org/2000/svg"">
     /*" & _Rank & "*/
     <line  x1=""50%"" x2=""50%"" y1=""0%"" y2=""100%"" stroke=""" & _ColorGrey & """ stroke-width=""1""></line >
-    <rect y=""40%"" x=""" & _XPinhead & """ width=""" & 7 & """ height=""20%"" fill=""" & _ColorBlack & """></rect>   
+    <rect y=""35%"" x=""" & _XPinhead & """ width=""" & "10" & """ height=""30%"" fill=""" & _ColorBlack & """></rect>   
     <rect y=""45%"" x=""" & _X & """ width="""
         & FORMAT ( _Width, "0.0%" ) & """ height=""10%"" fill=""" & _barColor & """></rect>
     
