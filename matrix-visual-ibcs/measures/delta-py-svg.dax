@@ -1,13 +1,17 @@
-DeltaPY SVG = 
-//ΔPY = AC - PY (difference between AC and PY)
-//Returns an SVG image code with ΔPY bars (green - positive, red - negative)
-//  and a vertical line for Axis Y (ΔPY = 0)
+//ΔPY% = (AC - PY) / PY (relative difference between AC and PY)
+//Returns an SVG image code with ΔPY% pin charts (green - positive, red - negative, black pinheads)
+//  and a vertical line for Axis Y (ΔPY% = 0)
 VAR _ColorGrey = "#c6c6c6"
 VAR _ColorRed = "#ff0000"
 VAR _ColorGreen = "#008e96"
+VAR _ColorBlack = "#404040"
 VAR _Value =
-    --ΔPY
-    IF ( HASONEVALUE ( 'Sales Person'[Name] ), [DeltaPY], [Average DeletaPY] )
+    --ΔPY%
+    IF (
+        HASONEVALUE ( 'Sales Person'[Name] ),
+        [DeltaPY%],
+        [Average DeletaPY%]
+    )
 VAR _FontWeight =
     --'normal' font for sales persons, 'bold' font for total row (average)
     IF (
@@ -18,12 +22,12 @@ VAR _FontWeight =
 VAR _maxValue =
     --max value to calcualte axis X scale
     MAX (
-        ABS ( MAXX ( ALLSELECTED ( 'Sales Person' ), [DeltaPY] ) ),
-        ABS ( MINX ( ALLSELECTED ( 'Sales Person' ), [DeltaPY] ) )
+        ABS ( MAXX ( ALLSELECTED ( 'Sales Person' ), [DeltaPY%] ) ),
+        ABS ( MINX ( ALLSELECTED ( 'Sales Person' ), [DeltaPY%] ) )
     )
 VAR _WidthValue =
     --bar width (numeric value)
-    ( DIVIDE ( ABS ( _Value ), _maxValue ) / 2 ) * 0.8
+    ( DIVIDE ( ABS ( _Value ), _maxValue ) / 2 ) * 0.65
 VAR _Width =
     --bar width - text for SVG
     FORMAT ( _WidthValue, "0.0%" )
@@ -31,11 +35,20 @@ VAR _barColor =
     --green or red
     IF ( _Value > 0, _ColorGreen, _ColorRed )
 VAR _X =
-    --x position of a bar
+    --x position of a bar (pin)
     SWITCH (
         TRUE (),
         _Value >= 0, "50%",
-        _Value < 0, FORMAT ( 0.5 - _WidthValue, "0%" )
+        _Value < 0, FORMAT ( 0.5 - _WidthValue, "0.0%" )
+    )
+VAR _XPinhead =
+    --x position of a bar (pinhead)
+    SWITCH (
+        TRUE (),
+        _Value >= 0,
+            FORMAT ( 0.5 + _WidthValue - 3 / 200, "0.0%" ),
+        _Value < 0,
+            FORMAT ( 0.5 - _WidthValue - 3 / 200, "0.0%" )
     )
 VAR _XText =
     --x position of a label
@@ -49,24 +62,28 @@ VAR _Anchor =
     SWITCH ( TRUE (), _Value >= 0, "start", _Value < 0, "end" )
 VAR _DX =
     --text offset along axis X
-    SWITCH ( TRUE (), _Value >= 0, 5, _Value < 0, -5 )
+    SWITCH ( TRUE (), _Value >= 0, 10, _Value < 0, - 10 )
 VAR _Rank =
     --row value rank to ensure correct column sorting
     10000
-        + RANKX ( ALLSELECTED ( 'Sales Person' ), [DeltaPY],, ASC )
+        + RANKX ( ALLSELECTED ( 'Sales Person' ), [DeltaPY%],, ASC )
 VAR _SVG =
     --SVG code
     --header
     --comment with Rank text for sorting
     --line (axis Y)
-    --rectangle for DeltaPY (green or red)
-    --text data label for DeltaPY
+    --rectangle black pinhead
+    --rectangle for DeltaPY% (green or red)
+    --text data label for DeltaPY%
     --SVG style
     "data:image/svg+xml;utf8," & "<svg xmlns=""http://www.w3.org/2000/svg"">
-    /*" & _Rank & "*/ 
+    /*" & _Rank & "*/
     <line  x1=""50%"" x2=""50%"" y1=""0%"" y2=""100%"" stroke=""" & _ColorGrey & """ stroke-width=""1""></line >
-    <rect y=""30%"" x=""" & _X & """ width=""" & _Width & """ height=""40%"" fill=""" & _barColor & """></rect>    
-    <text text-anchor=""" & _Anchor & """ x=""" & _XText & """ dx=""" & _DX & """ y=""55%"" font-weight=""" & _FontWeight & """>"
+    <rect y=""35%"" x=""" & _XPinhead & """ width=""" & "10" & """ height=""30%"" fill=""" & _ColorBlack & """></rect>   
+    <rect y=""45%"" x=""" & _X & """ width="""
+        & FORMAT ( _Width, "0.0%" ) & """ height=""10%"" fill=""" & _barColor & """></rect>
+    
+        <text text-anchor=""" & _Anchor & """ x=""" & _XText & """ dx=""" & _DX & """ y=""55%"" font-weight=""" & _FontWeight & """>"
         & FORMAT ( _Value, "+#,0;-#,0;#,0" ) & "</text>    
 " & [SVG Style] & "
 </svg>"
