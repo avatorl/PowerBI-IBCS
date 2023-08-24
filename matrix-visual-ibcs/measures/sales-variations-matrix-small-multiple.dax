@@ -1,0 +1,229 @@
+SVG Sales Variations = 
+//Generates SVG code for a bar chart
+//To be used in core Matrix visual as small multiple
+//Author: Andrzej Leszkiewicz
+//Twitter: https://twitter.com/avatorl
+//LinkedIn: https://www.linkedin.com/in/avatorl/
+//License: CC BY 4.0 (Share and Adapt with Attribution)
+//Visualization design is based on IBCS guidlines: https://www.ibcs.com/ibcs-standards-1-2/
+//Not produced, not certified, not authorized, not endorsed by IBCS® https://www.ibcs.com/
+//Kudos to https://twitter.com/tpnRel1 for inspiration and useful tips
+//
+//SETTINGS
+VAR _IsRelativeVariance =
+    ( SELECTEDVALUE ( 'SwitchVariance'[Variance] ) = "Relative" )
+VAR _ColorGreen = --for positive columns
+"#008e96"
+VAR _ColorRed = --for negative columns
+"#ff0000"
+VAR _ColorBlack = --for text and lines
+"#000000"
+VAR _ColorWhite = --for PL columns fill
+"#ffffff"
+VAR _SVGWidth --SVG image width
+= 350 -- px
+VAR _SVGHeight --SVG image height
+= 275 -- px
+VAR _HeaderHeight --space on the top (above the plot, for the title)
+= 55 -- px
+VAR _FooterHeight --space on the bottom (below the plot, for period labels)
+= 75 -- px
+VAR _ColumnWidthProportion = --column width / category width
+    IF ( _IsRelativeVariance, 1 / 10, 2 / 3 )
+VAR _PinheadWidthMutiplier = 3
+VAR _MaxColumnWidth =
+    IF ( _IsRelativeVariance, 5, 30 ) -- px, max size of column (px), if the calculated value is bigger than this, the column will be this size
+VAR _DataLabelOffset = 5 -- px
+VAR _LineWidth = 0.3 -- px
+VAR _FontFamily = "Segoe UI,sans-serif"
+VAR _TitleFontSize = 18
+VAR _PeriodLabelFontSize = 14
+VAR _DataLabelFontSize = 14 //
+//DATA PREPARATION
+VAR _DataTable =
+    -- data table
+    ADDCOLUMNS (
+        SELECTCOLUMNS (
+            -- all periods
+            SUMMARIZE ( 'Year', 'Year'[Year], 'Year'[IsActual] ),
+            "@Period", 'Year'[Year],
+            --TRUE for actual period (AC), false for planed period (PL)
+            "@IsActual", 'Year'[IsActual]
+        ),
+        -- value (absolute variance)
+        "@Value", IF ( _IsRelativeVariance, [Delta Average Sales %], [Delta Average Sales] )
+    )
+VAR _TableDataWithRowNum =
+    -- data table with row numbers
+    ADDCOLUMNS (
+        _DataTable,
+        "@rowNum", ROWNUMBER ( _DataTable, ORDERBY ( [@Period], ASC ) )
+    )
+VAR _PLPeriodStart =
+    --First PL year
+    CALCULATE (
+        MIN ( ( 'Year'[Year] ) ),
+        'Year'[IsActual] = FALSE ()
+    ) //CALCULATIONS
+VAR _PeriodEnd =
+    --last year
+    SELECTCOLUMNS (
+        TOPN ( 1, 'Year', 'Year'[Year], DESC ),
+        "@Period", 'Year'[Year]
+    )
+VAR _PeriodStart =
+    --first year
+    SELECTCOLUMNS (
+        TOPN ( 1, 'Year', 'Year'[Year], ASC ),
+        "@Period", 'Year'[Year]
+    )
+VAR _PeriodMiddle =
+    --middle year
+    ROUND ( ( _PeriodEnd - _PeriodStart ) / 2 + _PeriodStart, 0 )
+VAR _MaxValue =
+    --required to define scaling
+    MAXX ( _TableDataWithRowNum, [@Value] )
+VAR _MinValue =
+    --required to define scaling
+    MINX ( _TableDataWithRowNum, [@Value] )
+VAR _CountOfPeriods =
+    --count of years
+    COUNTROWS ( _TableDataWithRowNum )
+VAR _PlotHeight = --plot height = SVG image height - header and footer height
+_SVGHeight - _HeaderHeight - _FooterHeight
+VAR _ColumnWidth =
+    --column width (2/3 of period band), but not wider than _MaxColumnWidth
+    VAR _CalcualtedColumWidth =
+        ROUND ( DIVIDE ( _SVGWidth, _CountOfPeriods ) * _ColumnWidthProportion, 1 )
+    RETURN
+        MIN ( _CalcualtedColumWidth, _MaxColumnWidth )
+VAR _SpaceBetweenColumns =
+    --white space between columns
+    DIVIDE (
+        _SVGWidth - ( _ColumnWidth * _CountOfPeriods ),
+        _CountOfPeriods + 1
+    )
+VAR _Range =
+    --value range
+    SWITCH (
+        TRUE (),
+        _MaxValue < 0, ABS ( _MinValue ),
+        _MinValue > 0, _MaxValue,
+        ( _MaxValue - _MinValue )
+    )
+VAR _ZeroY =
+    --position of 0 line on axis Y
+    _HeaderHeight
+        + ROUND (
+            DIVIDE ( IF ( _MaxValue >= 0, _MaxValue, 0 ), _Range ) * _PlotHeight,
+            0
+        ) //
+//DATA MARKS
+VAR _DataMarks =
+    CONCATENATEX (
+        _TableDataWithRowNum,
+        VAR _Value = [@Value]
+        VAR _RowNum = [@rowNum]
+        VAR _Period = [@Period]
+        VAR _IsActual = [@IsActual]
+        VAR _ColumnHeight =
+            --column height in px (scaled)
+            ROUND (
+                DIVIDE ( ABS ( _Value ), _Range ) * _PlotHeight,
+                1
+            )
+        VAR _xPosition = --x position of a column
+        ( ( _RowNum - 1 ) * _ColumnWidth ) + ( _spaceBetweenColumns * _RowNum )
+        VAR _ColumnColorOutline =
+            --outline color (green or red)
+            IF ( _Value >= 0, _ColorGreen, _ColorRed )
+        VAR _ColumnColorFill =
+            --file color: same as outline color for AC, white for PL
+            IF (
+                _IsRelativeVariance,
+                _ColumnColorOutline,
+                IF ( _IsActual, _ColumnColorOutline, _ColorWhite )
+            )
+        VAR _PinheadColorFill =
+            --file color: same as outline color for AC, white for PL
+            IF (
+                _IsActual,
+                _ColorBlack,
+                _ColorWhite
+            )
+        VAR _BarYPosition =
+            --bar start y position (for negative bars - same as zero line postion)
+            _ZeroY
+                + IF ( _Value >= 0, - _ColumnHeight, 0 )
+        VAR _PeriodLineYPosition =
+            --period line y position
+            _ZeroY
+                + IF ( _Value >= 0, 0, _ColumnHeight + _DataLabelFontSize ) + _DataLabelOffset * 2
+        VAR _TextYPosition =
+            _ZeroY
+                + IF (
+                    _Value >= 0,
+                    - ABS ( _ColumnHeight ) - _DataLabelOffset
+                        - IF ( _IsRelativeVariance, _ColumnWidth * _PinheadWidthMutiplier / 2, 0 ),
+                    ABS ( _ColumnHeight ) + _DataLabelOffset + _DataLabelFontSize
+                        + IF ( _IsRelativeVariance, _ColumnWidth * _PinheadWidthMutiplier / 2, 0 )
+                )
+        VAR _Baseline =
+            -- for data labels
+            IF ( _Value >= 0, "top", "bottom" )
+        VAR _PinheadRect =
+            --rectangle: data column
+            "<rect x='" & _xPosition - _ColumnWidth * _PinheadWidthMutiplier / 3 & "' y='"
+                & _BarYPosition
+                    + IF ( _Value >= 0, 0, _ColumnHeight ) - _ColumnWidth * _PinheadWidthMutiplier / 2 & "' width = '" & _ColumnWidth * _PinheadWidthMutiplier & "' height = '" & _ColumnWidth * _PinheadWidthMutiplier & "px' fill='" & _PinheadColorFill & "' stroke='" & _ColorBlack & "' opacity='1' style='outline: none;'></rect>"
+        VAR _DataRect = --rectangle: data column
+        "<rect x='" & _xPosition & "' y='" & _BarYPosition & "' width = '" & _ColumnWidth & "' height = '" & _ColumnHeight & "px' fill='" & _ColumnColorFill & "' stroke='" & _ColumnColorOutline & "' opacity='1' style='outline: none;'></rect>"
+        VAR _DataLabelText =
+            --text: data label
+            "<text x='" & _xPosition + _ColumnWidth / 2 & "' y='" & _TextYPosition & "' font-family='" & _FontFamily & "' font-size='" & _DataLabelFontSize & "px' text-anchor='middle' alignment-baseline='" & _Baseline & "'   fill='" & _ColorBlack & "'>"
+                & FORMAT ( ROUND ( [@Value], 0 ), "+#,0;-#,0;#,0" ) & "</text>"
+        VAR _PeriodVerticalLine =
+            --period vertical line (for start, middle, end periods only)
+            IF (
+                _Period IN { _PeriodStart, _PeriodMiddle, _PeriodEnd },
+                "<line x1='" & _xPosition + _ColumnWidth / 2 & "' x2='" & _xPosition + _ColumnWidth / 2 & "' y1='"
+                    & _PeriodLineYPosition
+                        + IF ( _IsRelativeVariance, _ColumnWidth * _PinheadWidthMutiplier / 2, 0 ) & "' y2='" & _SVGHeight - _PeriodLabelFontSize - _DataLabelOffset * 2 & "' stroke='" & _ColorBlack & "' stroke-width='" & _LineWidth & "'></line>",
+                ""
+            )
+        VAR _PeriodLabel =
+            --period label (for start, middle, end periods only)
+            IF (
+                _Period
+                    IN { _PeriodStart, _PeriodMiddle, _PeriodEnd }
+                        && SELECTEDVALUE ( 'Country'[Grid Row] ) = 1
+                        && SELECTEDVALUE ( 'Country'[Grid Column] ) = 1,
+                "<text x='" & _xPosition + _ColumnWidth / 2 & "' y='" & _SVGHeight - _PeriodLabelFontSize - _DataLabelOffset & "'  dx='-16' font-family='" & _FontFamily & "' font-size='" & _PeriodLabelFontSize & "px' dominant-baseline='hanging'  fill='" & _ColorBlack & "'>" & _Period & "</text>",
+                ""
+            )
+        VAR _PLVerticalLine =
+            --vertical line between AC and PL periods
+            IF (
+                _Period = _PLPeriodStart,
+                "<line x1='" & _xPosition - _SpaceBetweenColumns / 2 & "' x2='" & _xPosition - _SpaceBetweenColumns / 2 & "' y1='" & _ZeroY - _DataLabelFontSize * 2 & "' y2='" & _ZeroY + _DataLabelFontSize * 2 & "' stroke='" & _ColorBlack & "' stroke-width='" & _LineWidth & "'></line>",
+                ""
+            )
+        RETURN
+            IF ( _IsRelativeVariance, _PinheadRect, "" ) & _DataRect & _DataLabelText & _PeriodVerticalLine & _PeriodLabel & _PLVerticalLine
+    ) //
+//ADDITIONAL VISUAL ELEMENTS
+VAR _SVGDeclaration = "data:image/svg+xml;utf8,"
+VAR _SVGOpen = "<svg xmlns='http://www.w3.org/2000/svg' x='0px' y='0px' width='" & _SVGWidth & "' height='" & _SVGHeight & "'>"
+VAR _svgEnd = "</svg>" //
+VAR _TextTitle =
+    --text: chart title (country name)
+    "<text y='16' font-size='" & _TitleFontSize & "px' font-family='" & _FontFamily & "' dominant-baseline='middle' text-anchor='start' fill='" & _ColorBlack & "'>"
+        & SELECTEDVALUE ( 'Country'[Country] ) & "
+
+    </text>"
+VAR _AxisXLine = --axis X domain line (Axis Y = 0)
+"<line x1='0' x2='" & _SVGWidth & "' y1='" & _ZeroY & "' y2='" & _ZeroY & "' font-family='" & _FontFamily & "' stroke='" & _ColorBlack & "' stroke-width='" & _LineWidth & "'></line>"
+VAR SVGImageURL = -- combined SVG URL code
+_svgDeclaration & _SVGOpen & _TextTitle & _DataMarks & _AxisXLine & _svgEnd
+RETURN
+    SVGImageURL
