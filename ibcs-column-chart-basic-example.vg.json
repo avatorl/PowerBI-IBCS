@@ -1,0 +1,117 @@
+{
+  "$schema": "https://vega.github.io/schema/vega/v5.json",
+  "description": "IBCS-styled column chart",
+  "width": 400,
+  "height": 200,
+  "padding": 5,
+  "data": [
+    {
+      "name": "table",
+      "values": [
+        {"month": "Jan", "AC": 28, "PY": 25},
+        {"month": "Feb", "AC": 55, "PY": 60},
+        {"month": "Mar", "AC": 43, "PY": 38},
+        {"month": "Apr", "AC": 91, "PY": 101},
+        {"month": "May", "AC": 81, "PY": 77},
+        {"month": "Jun", "AC": 53, "PY": 58},
+        {"month": "Jul", "AC": 19, "PY": 19},
+        {"month": "Aug", "AC": 87, "PY": 91},
+        {"month": "Sep", "AC": 83, "PY": 80},
+        {"month": "Oct", "AC": 94, "PY": 90},
+        {"month": "Nov", "AC": 91, "PY": 93},
+        {"month": "Dec", "AC": 56, "PY": 60}
+      ]
+    }
+  ],
+  "signals": [],
+  "scales": [
+    {
+      "name": "xscale",
+      "type": "band",
+      "domain": {"data": "table", "field": "month"},
+      "range": "width",
+      "round": true
+    },
+    {
+      "name": "yscale",
+      "domain": {"data": "table", "field": "AC"},
+      "nice": true,
+      "range": "height"
+    }
+  ],
+  "axes": [
+    {
+      "orient": "bottom",
+      "scale": "xscale",
+      "domain": false,
+      "ticks": false,
+      "labelFontSize": 14
+    }
+  ],
+  "marks": [
+    {
+      "name": "rect-py",
+      "type": "rect",
+      "from": {"data": "table"},
+      "encode": {
+        "enter": {
+          "xc": {"scale": "xscale", "field": "month", "band": 0.35},
+          "width": {"scale": "xscale", "band": 0.667},
+          "y": {"scale": "yscale", "field": "PY"},
+          "y2": {"scale": "yscale", "value": 0},
+          "fill": {"value": "#AAAAAA"}
+        }
+      }
+    },
+    {
+      "name": "rect-ac",
+      "type": "rect",
+      "from": {"data": "table"},
+      "encode": {
+        "enter": {
+          "xc": {"scale": "xscale", "field": "month", "band": 0.5},
+          "width": {"scale": "xscale", "band": 0.667},
+          "y": {"scale": "yscale", "field": "AC"},
+          "y2": {"scale": "yscale", "value": 0},
+          "fill": {"value": "#333333"}
+        }
+      }
+    },
+    {
+      "name": "rect-delta-py",
+      "type": "rect",
+      "from": {"data": "table"},
+      "encode": {
+        "enter": {
+          "xc": {
+            "scale": "xscale",
+            "field": "month",
+            "offset": {
+              "signal": "(datum.AC>datum.PY?0.1:0.75)*bandwidth('xscale')"
+            }
+          },
+          "width": {"scale": "xscale", "band": 0.15},
+          "y": {"scale": "yscale", "signal": "min(datum.AC,datum.PY)"},
+          "y2": {"scale": "yscale", "signal": "max(datum.AC,datum.PY)"},
+          "fill": {"signal": "datum.AC>datum.PY?'#008080':'#FF0000'"}
+        }
+      }
+    },
+    {
+      "type": "text",
+      "from": {"data": "rect-ac"},
+      "encode": {
+        "enter": {
+          "align": {"value": "center"},
+          "baseline": {"value": "bottom"},
+          "fill": {"value": "#333333"},
+          "x": {"scale": "xscale", "field": "datum.month", "band": 0.5},
+          "y": {"scale": "yscale", "field": "datum.AC", "offset": -2},
+          "text": {"field": "datum.AC"},
+          "fontSize": {"value": 16}
+        }
+      }
+    }
+  ],
+  "config": {}
+}
