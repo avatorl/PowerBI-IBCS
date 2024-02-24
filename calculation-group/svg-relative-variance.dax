@@ -1,0 +1,147 @@
+//=================================================================================================
+//Project: a calculation group for generating IBCS-styled charts (as SVG images)
+//  The visualization design follows IBCS guidelines https://www.ibcs.com/ibcs-standards-1-2/
+//  Although it is not produced, not certified, not authorized, not endorsed by IBCS® https://www.ibcs.com/
+//  The charts can be embedded into Table, Matrix, and New Card core Power BI visuals
+//=================================================================================================
+//Author: Andrzej Leszkiewicz, an IBCS® Certified Analyst
+//  For more information, visit https://powerofbi.org/
+//  Connect on LinkedIn at https://www.linkedin.com/in/avatorl/
+//  or follow on Twitter https://twitter.com/avatorl
+//  Contact via email at andrzej@powerofbi.org
+//=================================================================================================
+//License: MIT Expat License https://en.wikipedia.org/wiki/MIT_License (free)
+//=================================================================================================
+//Description: This calculation item Generates an SVG image featuring a horizontal diverging pin chart (to show relative variance)
+//  The chart includes diverging bars value bar: green for positive variance, red for negative variance (pins) with pinheads
+//  It also includes data labels (for all pins)
+//Updated: 2024-02-24
+//=================================================================================================
+// VALUES: uses other calculated items to prepare all values required to generate the chart
+//=================================================================================================
+VAR _ValueMain =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Main Value" ) --for red and green bars     
+VAR _IsTotalRow =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Is Total" ) --is it total row? (True/False)
+VAR _DataLabel =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Data Label" ) --for data labels (formated Main Value with +/- leading character) 
+VAR _minDelta = 0 //
+//=================================================================================================    
+//CONFIG: chart formatting options
+//=================================================================================================//
+VAR _Rank =
+    1000000000000
+        + ROUND ( _ValueMain + 100, 0 ) --row value converted to a string that allows correct column sorting
+VAR _ValueFix =
+    MIN ( 100, _ValueMain )
+VAR _ColorGrey = [SVG Color Grey]
+VAR _ColorRed = [SVG Color Red]
+VAR _ColorGreen = [SVG Color Green]
+VAR _OutlinerTriangle =
+    --Black Right-Pointing Small Triangle
+    UNICHAR ( 9656 )
+VAR _Em = [SVG Font Size] * 4 / 3 --px
+VAR _FontWeight =
+    --'normal' font for sales persons, 'bold' font for total row (average)
+    IF (
+        _IsTotalRow,
+        "bold",
+        "normal"
+    )
+VAR _maxValue = 70
+VAR _SVG_Width = [SVG Width]
+VAR _SVG_Height = _Em * 1.5
+VAR _SVG_LeftPadding = 150
+VAR _SVG_RightPadding = 200
+VAR _SVG_ColumnWidth = _SVG_Width - _SVG_LeftPadding - _SVG_RightPadding //
+//=================================================================================================
+//SCALING: converting data values into X and Y positions on the SVG plot
+//=================================================================================================
+VAR _AxisYPosition =
+    _SVG_LeftPadding
+        + IF (
+            _minDelta >= 0,
+            0,
+            ROUND ( DIVIDE ( ABS ( _minDelta ), _maxValue ) * _SVG_ColumnWidth, 0 )
+        )
+VAR _WidthValue =
+    --bar width (numeric value)
+    ROUND (
+        DIVIDE ( ABS ( _ValueFix ), _maxValue ) * _SVG_ColumnWidth,
+        0
+    )
+VAR _barColor =
+    --green or red
+    IF ( _ValueMain > 0, _ColorGreen, _ColorRed )
+VAR _X =
+    --x position of a bar
+    SWITCH (
+        TRUE (),
+        _ValueMain >= 0, _AxisYPosition,
+        _ValueMain < 0, _AxisYPosition - _WidthValue
+    )
+VAR _XPinhead =
+    --x position of a bar (pinhead)
+    SWITCH (
+        TRUE (),
+        _ValueMain >= 0,
+            _AxisYPosition + _WidthValue - _Em * 0.4,
+        _ValueMain < 0,
+            _AxisYPosition - _WidthValue - _Em * 0.3
+    )
+VAR _Anchor =
+    --text anchor
+    IF (
+        _IsTotalRow,
+        "middle",
+        IF ( _ValueMain >= 0, "start", "end" )
+    )
+VAR _DX =
+    --text offset along axis X
+    SWITCH (
+        TRUE (),
+        _ValueMain >= 0,
+            IF ( _ValueMain > _ValueFix, _Em * 0.3, _Em * 0.7 ) + 5,
+        _ValueMain < 0, - 5
+    ) // 
+//=================================================================================================    
+//GENERATE SVG: concatenating parts of the SVG image
+//=================================================================================================
+VAR _SVG_Header = "data:image/svg+xml;utf8,"
+VAR _SVG_Open = "<svg xmlns='http://www.w3.org/2000/svg' width='" & _SVG_Width & "' height='" & _SVG_Height & "' >"
+VAR _SVG_Style = "<style>
+      text{
+        font-family: Segoe UI, wf_segoe-ui_normal, sans-serif;
+        font-size: " & _Em & "px;
+        font-weight: " & _FontWeight & ";
+        dominant-baseline: central;
+        text-anchor: " & _Anchor & ";
+      }
+      #markoutlier{
+        dominant-baseline: middle;
+      }
+  </style>"
+VAR _SVG_Close = "</svg>"
+VAR _SVG_SortBy = "/*SortBy:" & _Rank & "*/"
+VAR _SVG_AxisY = "<line id='line-axisy' x1='" & _AxisYPosition & "' x2='" & _AxisYPosition & "' y1='0%' y2='100%' stroke='" & _ColorGrey & "' stroke-width='" & _Em * 0.3 & "'></line >"
+VAR _SVG_BarDeltaPY = "<rect id='rect-variancepin' x='" & _X & "' width='" & _WidthValue & "' y='" & _Em * 0.6 & "' height='" & _Em * 0.3 & "' fill='" & _barColor & "' stroke='" & _barColor & "' stroke-width='0.5'></rect>"
+VAR _SVG_PinHead = "<rect id='rect-pinhead' x='" & _XPinhead & "' width='" & _Em * 0.7 & "' y='" & _Em * 0.3 & "' height='" & _Em * 0.9 & "' fill='#000000'></rect>"
+VAR _SVG_TextDeltaPYLabel = "<text id='text-label' text-anchor='" & _Anchor & "' x='" & _XPinhead & "' dx='" & _DX & "' y='50%' >" & _DataLabel & "</text>"
+VAR _SVG_Outliner =
+    "<text id='markoutlier' x='"
+        & _XPinhead
+            + _Em * 0.55
+                * LEN ( _DataLabel ) & "' dx='" & _DX & "' fill='" & _barColor & "' y='" & _Em * 0.85 & "' >" & _OutlinerTriangle & "</text>"
+VAR _SVG_PinHeadX =
+    IF (
+        ISBLANK ( _ValueMain ),
+        "",
+        IF ( _ValueMain > _ValueFix, _SVG_Outliner, _SVG_PinHead )
+    )
+VAR _SVG_TextDeltaPYLabelTotal = "<text id='text-labeltotal' x='" & _AxisYPosition & "' y='50%' >" & _DataLabel & "</text>"
+VAR _SVG_Total = _SVG_Header & _SVG_Open & _SVG_TextDeltaPYLabelTotal & _SVG_Style & _SVG_Close
+VAR _SVG_Row = _SVG_Header & _SVG_Open & _SVG_SortBy & _SVG_AxisY & _SVG_PinHeadX & _SVG_BarDeltaPY & _SVG_TextDeltaPYLabel & _SVG_Style & _SVG_Close
+VAR _SVG =
+    IF ( _IsTotalRow, _SVG_Total, _SVG_Row )
+RETURN
+    _SVG
