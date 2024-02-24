@@ -1,0 +1,131 @@
+//=================================================================================================
+//Project: a calculation group for generating IBCS-styled charts (as SVG images)
+//  The visualization design follows IBCS guidelines https://www.ibcs.com/ibcs-standards-1-2/
+//  Although it is not produced, not certified, not authorized, not endorsed by IBCS® https://www.ibcs.com/
+//  The charts can be embedded into Table, Matrix, and New Card core Power BI visuals
+//=================================================================================================
+//Author: Andrzej Leszkiewicz, an IBCS® Certified Analyst
+//  For more information, visit https://powerofbi.org/
+//  Connect on LinkedIn at https://www.linkedin.com/in/avatorl/
+//  or follow on Twitter https://twitter.com/avatorl
+//  Contact via email at andrzej@powerofbi.org
+//=================================================================================================
+//License: MIT Expat License https://en.wikipedia.org/wiki/MIT_License (free)
+//=================================================================================================
+//Description: This calculation item Generates an SVG image featuring a horizontal diverging bar chart (to show absolute variance)
+//  The chart includes diverging bars value bar: green for positive variance, red for negative variance
+//  It also includes data labels (for all bars)
+//Updated: 2024-02-23
+//=================================================================================================
+// VALUES: uses other calculated items to prepare all values required to generate the chart
+//=================================================================================================
+VAR _ValueMain =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Main Value" ) --for red and green bars     
+VAR _IsTotalRow =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Is Total" ) --is it total row? (True/False)
+VAR _DataLabel =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Data Label" ) --for data labels (formated Main Value with +/- leading character)
+//VAR _DataLabelTotal =
+//    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Total Value" ) -- data label for total row
+VAR _valueMax =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Max Value" ) --max value (for scaling)
+VAR _valueMin =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Min Value" ) --min value (for scaling)
+VAR _ValueScale =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Scale Value" ) //    
+//=================================================================================================    
+//CONFIG: chart formatting options
+//=================================================================================================//
+VAR _Rank =
+    1000000000000
+        + ROUND ( _ValueMain + ABS ( _valueMin ), 0 ) --row value converted to a string that allows correct column sorting
+VAR _SVG_Width = [SVG Width]
+VAR _ColorGrey = [SVG Color Grey]
+VAR _ColorRed = [SVG Color Red]
+VAR _ColorGreen = [SVG Color Green]
+VAR _Em = [SVG Font Size] * 4 / 3 --px
+VAR _SVG_LeftPadding = 120
+VAR _SVG_RightPadding = 120
+VAR _SVG_ColumnWidth = _SVG_Width - _SVG_LeftPadding - _SVG_RightPadding
+VAR _Scale =
+    DIVIDE ( _SVG_ColumnWidth, _ValueScale )
+VAR _FontWeight =
+    --'normal' font for sales persons, 'bold' font for total row (average)
+    IF (
+        _IsTotalRow,
+        "bold",
+        "normal"
+    ) //
+//=================================================================================================
+//SCALING: converting data values into X and Y positions on the SVG plot
+//=================================================================================================
+VAR _AxisYPosition =
+    _SVG_LeftPadding
+        + IF (
+            _valueMin >= 0,
+            0,
+            ROUND (
+                DIVIDE ( ABS ( _valueMin ), ABS ( _valueMin ) + _valueMax ) * _SVG_ColumnWidth,
+                0
+            )
+        )
+VAR _WidthValue =
+    --bar width (numeric value)
+    ROUND ( ABS ( _ValueMain ) * _Scale, 0 )
+VAR _barColor =
+    --green or red
+    IF ( _ValueMain > 0, _ColorGreen, _ColorRed )
+VAR _X =
+    --x position of a bar
+    SWITCH (
+        TRUE (),
+        _ValueMain >= 0, _AxisYPosition,
+        _ValueMain < 0, _AxisYPosition - _WidthValue
+    )
+VAR _XText =
+    --x position of a label
+    SWITCH (
+        TRUE (),
+        _ValueMain >= 0, _AxisYPosition + _WidthValue,
+        _ValueMain < 0, _X
+    )
+VAR _Anchor =
+    --text anchor
+    IF (
+        _IsTotalRow,
+        "middle",
+        IF ( _ValueMain >= 0, "start", "end" )
+    )
+VAR _DX =
+    --text offset along axis X
+    SWITCH (
+        TRUE (),
+        _ValueMain >= 0, 5,
+        _ValueMain < 0, -5
+    ) //
+//=================================================================================================    
+//GENERATE SVG: concatenating parts of the SVG image
+//=================================================================================================
+VAR _SVG_Header = "data:image/svg+xml;utf8,"
+VAR _SVG_Open = "<svg xmlns='http://www.w3.org/2000/svg' width='" & _SVG_Width & "' >"
+VAR _SVG_Style = "<style>
+      text{
+        font-family: Segoe UI, wf_segoe-ui_normal, sans-serif;
+        font-size: " & _Em & "px;
+        font-weight: " & _FontWeight & ";
+        dominant-baseline: central;
+        text-anchor: " & _Anchor & ";
+      }
+  </style>"
+VAR _SVG_Close = "</svg>"
+VAR _SVG_SortBy = "/*SortBy:" & _Rank & "*/" //VAR _SVG_Box = "<rect x='0%' y='0%' width='100%' height='100%' fill='#FFAAAA' />"
+VAR _SVG_AxisY = "<line  x1='" & _AxisYPosition & "' x2='" & _AxisYPosition & "' y1='0%' y2='100%' stroke='" & _ColorGrey & "' stroke-width='" & _Em * 0.3 & "'></line >"
+VAR _SVG_BarDeltaPY = "<rect x='" & _X & "' width='" & _WidthValue & "' y='" & _Em * 0.25 & "' height='" & _Em & "' fill='" & _barColor & "' stroke='" & _barColor & "' stroke-width='0.5'></rect>"
+VAR _SVG_TextDeltaPYLabel = "<text x='" & _XText & "' dx='" & _DX & "' y='50%' >" & _DataLabel & "</text>"
+VAR _SVG_TextDeltaPYLabelTotal = "<text x='" & _AxisYPosition & "' dx='" & 0 & "' y='50%' >" & _DataLabel & "</text>"
+VAR _SVG_Total = _SVG_Header & _SVG_Open & _SVG_TextDeltaPYLabelTotal & _SVG_Style & _SVG_Close
+VAR _SVG_Row = _SVG_Header & _SVG_Open & _SVG_SortBy & _SVG_SortBy & _SVG_AxisY & _SVG_BarDeltaPY & _SVG_TextDeltaPYLabel & _SVG_Style & _SVG_Close //VAR _SVG_SubRow = _SVG_Header & _SVG_Open & "<text x='" & _SVG_LeftPadding & "' dx='" & 0 & "' y='50%' font-weight='" & _FontWeight & "' text-anchor='end'>" & _DataLabel & "</text>" & _SVG_Style & _SVG_Close
+VAR _SVG =
+    IF ( _IsTotalRow, _SVG_Total, _SVG_Row )
+RETURN
+    _SVG
