@@ -1,0 +1,101 @@
+//=================================================================================================
+//Project: a calculation group for generating IBCS-styled charts (as SVG images)
+//  The visualization design follows IBCS guidelines https://www.ibcs.com/ibcs-standards-1-2/
+//  Although it is not produced, not certified, not authorized, not endorsed by IBCS® https://www.ibcs.com/
+//  The charts can be embedded into Table, Matrix, and New Card core Power BI visuals
+//=================================================================================================
+//Author: Andrzej Leszkiewicz, an IBCS® Certified Analyst
+//  For more information, visit https://powerofbi.org/
+//  Connect on LinkedIn at https://www.linkedin.com/in/avatorl/
+//  or follow on Twitter https://twitter.com/avatorl
+//  Contact via email at andrzej@powerofbi.org
+//=================================================================================================
+//License: MIT Expat License https://en.wikipedia.org/wiki/MIT_License (free)
+//=================================================================================================
+//Description: This calculation item Generates an SVG image featuring a horizontal bar chart (to show absolute values)
+//  The chart includes a base value bar: grey for the Previous Year (PY) or outlined for the Budget (BU)
+//  The main and second value stacked bars are represented with the main value (AC, actuals) in solid black and the second value (FC, forecast) hatched
+//  It also includes data labels for AC+FC and reference value triangles: outlined for the Budget (BU) or in grey  the Previous Year (PY)
+//Updated: 2024-02-24
+//=================================================================================================
+// VALUES: uses other calculated items to prepare all values required to generate the chart
+//=================================================================================================
+VAR _ValueMain =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Main Value" ) --for main solid black bars
+VAR _ValueBase =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Base Value" ) --for grey or outlined base value bars
+VAR _BaseType =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Base Type" ) --base type ("grey" or "outlined")      
+VAR _DataLabel =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Data Label" ) --for data labels (formateed Main Value)
+VAR _IsTotalRow =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Is Total" ) --is it total row? (True/False)
+VAR _valueMax =
+    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Max Value" ) --max value (for scaling)
+//VAR _valueSecond =
+//    CALCULATE ( SELECTEDMEASURE (), 'IBCS CHARTS'[Name] = "Max Value" ) --max value (for scaling)    
+//
+//=================================================================================================    
+//CONFIG: chart formatting options
+//=================================================================================================//
+VAR _SVG_Width = [SVG Width] --SVG image width
+VAR _SVG_LeftPadding = 0 --left side padding (before Y axis)
+VAR _SVG_RightPadding = 240 --right side padding (space for data labels)
+VAR _Rank =
+    1000000000000 + ROUND ( _ValueMain, 0 ) --a value that will be used to sort the column (main value converted into a sortable string)
+VAR _ColorMain = [SVG Color Black] -- main bar color
+VAR _ColorBase =
+    SWITCH ( _BaseType, "grey", [SVG Color Grey], "outlined", "#FFFFFF" ) --base value columns are either grey or white with black outline
+VAR _ColorBaseOutline =
+    SWITCH ( _BaseType, "grey", [SVG Color Grey], "outlined", [SVG Color Black] ) --base value columns are either grey or white with black outline
+VAR _Em =
+    ROUND ( [SVG Font Size] * 4 / 3, 0 ) --convert Pt font size to Px font size
+VAR _AxisLineWidth = _Em * 0.1
+VAR _mainBarYPosition = _Em * 0.25
+VAR _LabelOffset = 5 --offset between bars and data labels
+VAR _FontWeight =
+    --bold font for the total row
+    IF ( _IsTotalRow, "bold", "normal" ) //
+// set image width (Format Pane) to [SVG Width]
+// set image height (Format Pane) to _Em*1.5 (=36 for Font Size 18)  
+//=================================================================================================
+//SCALING: converting data values into X and Y positions on the SVG plot
+//=================================================================================================
+VAR _SVG_ColumnWidth = _SVG_Width - _SVG_LeftPadding - _SVG_RightPadding
+VAR _Scale =
+    DIVIDE ( _SVG_ColumnWidth, _ValueMax ) -- how many pixels per value unit
+VAR _WidthMain =
+    ROUND ( _ValueMain * _Scale, 0 ) --Main bar width (length)
+//VAR _WidthSecond =
+//    ROUND ( _ValueSecond * _Scale, 0 ) --Second bar width (length), stacked with the main bar
+VAR _WidthBase =
+    ROUND ( _ValueBase * _Scale, 0 ) --Base bar width (length)    
+//
+//=================================================================================================    
+//GENERATE SVG: concatenating parts of the SVG image
+//=================================================================================================
+VAR _SVG_Header = "data:image/svg+xml;utf8,"
+VAR _SVG_Open = "<svg xmlns='http://www.w3.org/2000/svg' width='" & _SVG_Width & "' >"
+VAR _SVG_Close = "</svg>"
+VAR _SVG_Style = "<style>
+      text{
+        font-family: Segoe UI, wf_segoe-ui_normal, sans-serif;
+        font-size: " & _Em & "px;
+        font-weight: " & _FontWeight & ";
+        dominant-baseline: central;
+      }
+  </style>"
+VAR SVG_HatchedPattern = [SVG Hatched Pattern]
+VAR _SVG_SortBy = "/*SortBy:" & _Rank & "*/" //VAR _SVG_Box = "<rect x='0%' y='0%' width='100%' height='100%' fill='#FFAAAA' />"
+VAR _SVG_LineAxisY = "<line id='line-axisY'  x1='" & _SVG_LeftPadding & "px' x2='" & _SVG_LeftPadding & "' y1='0%' y2='100%' stroke='#000000' stroke-width='" & _AxisLineWidth & "'></line >"
+VAR _SVG_BarBase = "<rect id='rect-base-value' x='" & _SVG_LeftPadding & "px' width='" & _WidthBase & "' y='0' height='" & _Em & "' fill='" & _ColorBase & "' stroke='" & _ColorBaseOutline & "' stroke-width='1'></rect>"
+VAR _SVG_BarMain = "<rect id='rect-main-value' x='" & _SVG_LeftPadding & "px' width='" & _WidthMain & "' y='" & _mainBarYPosition & "' height='" & _Em & "' fill='" & _ColorMain & "' stroke='" & _ColorMain & "' stroke-width='1.5'></rect>" //
+//VAR _SVG_BarSecond = "<rect x='" & _SVG_LeftPadding + _WidthMain & "px' width='" & _WidthSecond & "' y='" & _Em * 0.25 & "' height='" & _Em & "' fill='" & "url(#diagonal-stripe)" & "' stroke='" & _ColorMain & "' stroke-width='0.5'></rect>" //
+VAR _SVG_TextACFCLabel = "<text x='" & _SVG_LeftPadding + _WidthMain & "' dx='" & _LabelOffset & "' y='50%' >" & _DataLabel & "</text>"
+VAR _SVG_TextACFCLabelTotal = "<text x='" & _SVG_LeftPadding & "' dx='" & _LabelOffset & "' y='50%' >" & _DataLabel & "</text>"
+VAR _SVG_Total = _SVG_Header & _SVG_Open & _SVG_TextACFCLabelTotal & _SVG_Style & _SVG_Close
+VAR _SVG_Row = _SVG_Header & _SVG_Open & _SVG_SortBy & SVG_HatchedPattern & _SVG_BarBase & _SVG_BarMain & _SVG_LineAxisY & _SVG_TextACFCLabel & _SVG_Style & _SVG_Close //
+VAR _SVG =
+    IF ( _IsTotalRow, _SVG_Total, _SVG_Row )
+RETURN
+    _SVG
